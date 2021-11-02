@@ -13,7 +13,7 @@ display(J)
 for ipar in 1:40
 
     hx = 0.0 + ipar * 0.1
-    (B, E, H) = hinit(J, hx=hx, hz=0.0)
+    h = hinit(J, hx=hx, hz=0.0)
 
     # println("matrix elements")
     # display(H)
@@ -24,12 +24,12 @@ for ipar in 1:40
     # println(" ")
     
     info = LanczosInfo(4, 20, false, 1.0)
-    gamma = hoperation!(B, E, H, ones(2^N), ones(2^N))
-    g_out = lanczos_sparse(B, E, H, ones(2^N), gamma, info)
+    gamma = hoperation!(h, ones(2^N), ones(2^N))
+    g_out = lanczos_sparse(h, ones(2^N), gamma, info)
     # measure ground state energy
     #display(g_out)
     g2 = zeros(2^N)
-    g2 = hoperation!(B, E, H, g_out, g2)
+    g2 = hoperation!(h, g_out, g2)
     GS_energy = sum(g2 .* g_out) / N
     println(hx, " ", GS_energy)
 
