@@ -33,9 +33,6 @@ function hinit(J::Array{T, 2}; hx=1.0, hz=1.0) where T<:Float64
 
     h = SparseHamiltonian(N)
 
-    B = Vector{Int}(undef, n + Int(n//2) * N) 
-    E = Vector{Int}(undef, n)  
-    H = Vector{Float64}(undef, n + Int(n//2) * N)
     i = 1
     for s in 0:n-1 # binary representation
         e = 0
@@ -43,8 +40,8 @@ function hinit(J::Array{T, 2}; hx=1.0, hz=1.0) where T<:Float64
         # 1. diagonal matrix elements 
         spins = [(s & (1<<site_k) == 0) ? -1 : 1 for site_k in 0:N-1]
         intsum = sum([(J[k,l]*spins[k]*spins[l]) for k in 1:N for l in 1:k-1])
-        B[i] = s + 1  # one-indexing
-        H[i] = (intsum - sum(spins) * hz) / 2.0  # later on diagonal matrix elements are double counted, therefore we divide by 2 here.
+        h.B[i] = s + 1  # one-indexing
+        h.H[i] = (intsum - sum(spins) * hz) / 2.0  # later on diagonal matrix elements are double counted, therefore we divide by 2 here.
         i += 1
         e += 1
 
@@ -52,29 +49,28 @@ function hinit(J::Array{T, 2}; hx=1.0, hz=1.0) where T<:Float64
         for site in 0:N-1
             sprime = xor(s, (1<<site))  # xor corresponds to spin flip at `site`
             if sprime > s  # only upper triangular matrix since the Hamiltonian is hermitian 
-                B[i] = sprime + 1  # one-indexing
-                H[i] = -hx
+                h.B[i] = sprime + 1  # one-indexing
+                h.H[i] = -hx
                 i += 1 
                 e += 1
             end 
         end 
-        E[s+1] = e  # one-indexing
+        h.E[s+1] = e  # one-indexing
     end 
-    return (B, E, H)
+    return h
 end 
 
 "This function returns the *unnormalized* vector |gamma> = H |phi>, obtained by applying the Hamiltonian H
 to a normalize!d state |phi>. H contains the Hamiltonian matrix elements and B their locations
 in the sparse notation."
-function hoperation!(B::Vector{Int}, E::Vector{Int}, H::Vector{T}, phi::Vector{T},
-    gamma::Vector{T}) where T<:Float64
+function hoperation!(h::SparseHamiltonian{Int64, T}, phi::Vector{T}, gamma::Vector{T}) where T<:Float64
     n::Int = length(phi)
     fill!(gamma, 0.0)
     i=1
     for s in 1:n
-        for _ in 1:E[s]
-            gamma[B[i]] += H[i]*phi[s]
-            gamma[s] += H[i]*phi[B[i]]
+        for _ in 1:h.E[s]
+            gamma[h.B[i]] += h.H[i]*phi[s]
+            gamma[s] += h.H[i]*phi[h.B[i]]
             i += 1 
         end
     end 
@@ -114,8 +110,8 @@ end
 """"return ground state vector
  - v: random input vector on which the Krylov space is built
  - g_out: allocated vector into which the normalized ground state is written"""
-function lanczos_sparse(B::Vector{Int64}, E::Vector{Int}, H::Vector{T},
-    v::Vector{T}, g_out::Vector{T}, info::LanczosInfo; eps=1e-13) where T<:Float64
+function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vector{T}, 
+    info::LanczosInfo; eps=1e-13) where T<:Float64
 
     length(g_out) == length(v) || error("size mismatch")
     n = length(v)
@@ -134,7 +130,7 @@ function lanczos_sparse(B::Vector{Int64}, E::Vector{Int}, H::Vector{T},
     # generate the first two Lanczos states
     normalize!(v)
     p[:, 1] = v    
-    p[:, 2] = hoperation!(B, E, H, p[:,1], p[:,2])
+    p[:, 2] = hoperation!(h, p[:,1], p[:,2])
     a[1] = dot(p[:,1], p[:,2])
     for k = 1:n 
         p[k,2] -= a[1] * p[k,1]
@@ -143,7 +139,7 @@ function lanczos_sparse(B::Vector{Int64}, E::Vector{Int}, H::Vector{T},
 
     # generate the rest of the Lanczos basis
     for m = 2:info.qmin
-        p[:,m+1] = hoperation!(B, E, H, p[:,m], p[:,m+1])
+        p[:,m+1] = hoperation!(h, p[:,m], p[:,m+1])
         a[m] = dot(p[:,m], p[:,m+1])
 
         tri = SymTridiagonal(a[1:m], b[2:m]) 
@@ -175,7 +171,7 @@ function lanczos_sparse(B::Vector{Int64}, E::Vector{Int}, H::Vector{T},
         ene = e 
         for m = info.qmin+1:info.qmax
 
-            p[:, m+1] = hoperation!(B, E, H, p[:, m], p[:, m+1])
+            p[:, m+1] = hoperation!(h, p[:, m], p[:, m+1])
             a[m] = dot(p[:,m], p[:,m+1])
         
             tri = SymTridiagonal(a[1:m], b[2:m]) # ??? indices right ????
