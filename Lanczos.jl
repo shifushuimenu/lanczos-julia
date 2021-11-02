@@ -5,16 +5,37 @@
 
 using LinearAlgebra
 
+abstract type SparseSymmetricMatrix end
+
+struct SparseHamiltonian{iT, fT} <: SparseSymmetricMatrix 
+    n::iT       # dim of Hilbert space 
+    B::Vector{iT}  # B stores the positions of non-zero matrix elements in the respective rows of H 
+    E::Vector{iT}  # E stores for each state s the number of non-zero matrix elements <s'|H|s>
+    H::Vector{fT}  # Matrix elements in the same succession as stored in B 
+end 
+
+SparseHamiltonian(N::Int) = SparseHamiltonian(Int64, Float64, N)
+function SparseHamiltonian(iT::Type, fT::Type, N::Int)
+    n = 2^N
+    num_matrix_el = n+Int(n//2)*N
+    B = Vector{iT}(undef, num_matrix_el) 
+    E = Vector{iT}(undef, n)  
+    H = Vector{fT}(undef, num_matrix_el)
+    SparseHamiltonian{iT, fT}(n, B, E, H)
+end 
+
 
 function hinit(J::Array{T, 2}; hx=1.0, hz=1.0) where T<:Float64
     (N1, N2) = size(J)
     N1 == N2 || error("J must be square")
     N = N1
-    n::BigInt = 2^N
+    n::Int = 2^N
 
-    B = Vector{Int}(undef, n + BigInt(n//2) * N) 
-    E = Vector{Int}(undef, n)  # E stores for each state s the number of non-zero matrix elements <s'|H|s>
-    H = Vector{Float64}(undef, n + BigInt(n//2) * N)
+    h = SparseHamiltonian(N)
+
+    B = Vector{Int}(undef, n + Int(n//2) * N) 
+    E = Vector{Int}(undef, n)  
+    H = Vector{Float64}(undef, n + Int(n//2) * N)
     i = 1
     for s in 0:n-1 # binary representation
         e = 0
@@ -47,7 +68,7 @@ to a normalize!d state |phi>. H contains the Hamiltonian matrix elements and B t
 in the sparse notation."
 function hoperation!(B::Vector{Int}, E::Vector{Int}, H::Vector{T}, phi::Vector{T},
     gamma::Vector{T}) where T<:Float64
-    n::BigInt = length(phi)
+    n::Int = length(phi)
     fill!(gamma, 0.0)
     i=1
     for s in 1:n
