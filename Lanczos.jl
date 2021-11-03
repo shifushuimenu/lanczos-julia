@@ -128,7 +128,7 @@ mutable struct LanczosInfo
     error::Float64  # error, if error > eps 
 end 
 
-""""return ground state vector
+""""return ground state vector and Krylov subspace object 
  - v: random input vector on which the Krylov space is built
  - g_out: allocated vector into which the normalized ground state is written"""
 function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vector{T}, 
@@ -140,44 +140,41 @@ function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vec
         info.qmax = convert(Int, n)
     end 
 
-    p = Array{Float64, 2}(undef, (n, info.qmax+1))
-    a = Vector{Float64}(undef, info.qmax)
-    b = Vector{Float64}(undef, info.qmax+1)
-    L = Array{Float64, 2}(undef, (info.qmax, info.qmax))
+    Ks = KrylovSubspace(Float64, n, info.qmax, v)
 
     energies = Vector{Float64}(undef, info.qmax)
 
     # generate the first two Lanczos states
     normalize!(v)
-    p[:, 1] = v    
-    p[:, 2] = hoperation!(h, p[:,1], p[:,2])
-    a[1] = dot(p[:,1], p[:,2])
+    Ks.Q[:, 1] = v    
+    Ks.Q[:, 2] = hoperation!(h, Ks.Q[:,1], Ks.Q[:,2])
+    Ks.α[1] = dot(Ks.Q[:,1], Ks.Q[:,2])
     for k = 1:n 
-        p[k,2] -= a[1] * p[k,1]
+        Ks.Q[k,2] -= Ks.α[1] * Ks.Q[k,1]
     end 
-    b[2] = normalize!(p, 2)
+    Ks.β[2] = normalize!(Ks.Q, 2)
 
     # generate the rest of the Lanczos basis
     for m = 2:info.qmin
-        p[:,m+1] = hoperation!(h, p[:,m], p[:,m+1])
-        a[m] = dot(p[:,m], p[:,m+1])
+        Ks.Q[:,m+1] = hoperation!(h, Ks.Q[:,m], Ks.Q[:,m+1])
+        Ks.α[m] = dot(Ks.Q[:,m], Ks.Q[:,m+1])
 
-        tri = SymTridiagonal(a[1:m], b[2:m]) 
+        tri = SymTridiagonal(Ks.α[1:m], Ks.β[2:m]) 
         F = eigen(tri)
-        L[1:m, 1:m] = F.vectors
+        Ks.L[1:m, 1:m] = F.vectors
         energies[1:m] = F.values
         perm = sortperm(energies[1:m])
         energies[1:m] = energies[perm[1:m]]
-        L[1:m, 1:m] = L[1:m, perm[1:m]]
+        Ks.L[1:m, 1:m] = Ks.L[1:m, perm[1:m]]
 
-        p[:, m+1] -= a[m] .* p[:, m] .+ b[m]*p[:, m-1]
-        b[m+1] = normalize!(p, m+1)            
+        Ks.Q[:, m+1] -= Ks.α[m] .* Ks.Q[:, m] .+ Ks.β[m]*Ks.Q[:, m-1]
+        Ks.β[m+1] = normalize!(Ks.Q, m+1)            
 
         # explicit reorthogonalization of each newly generated state w.r.t. all 
         # other Lanczos vectors 
         for i = 1:m
-            Konst = dot(p[:, m+1], p[:, i]) 
-            p[:, m+1] = (p[:, m+1] .- Konst .* p[:, i]) ./ (1 - Konst * Konst)
+            Konst = dot(Ks.Q[:, m+1], Ks.Q[:, i]) 
+            Ks.Q[:, m+1] = (Ks.Q[:, m+1] .- Konst .* Ks.Q[:, i]) ./ (1 - Konst * Konst)
         end     
 
     end 
@@ -191,16 +188,16 @@ function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vec
         ene = e 
         for m = info.qmin+1:info.qmax
 
-            p[:, m+1] = hoperation!(h, p[:, m], p[:, m+1])
-            a[m] = dot(p[:,m], p[:,m+1])
+            Ks.Q[:, m+1] = hoperation!(h, Ks.Q[:, m], Ks.Q[:, m+1])
+            Ks.α[m] = dot(Ks.Q[:,m], Ks.Q[:,m+1])
         
-            tri = SymTridiagonal(a[1:m], b[2:m]) # ??? indices right ????
+            tri = SymTridiagonal(Ks.α[1:m], Ks.β[2:m]) # ??? indices right ????
             F = eigen(tri)
-            L[1:m, 1:m] = F.vectors
+            Ks.L[1:m, 1:m] = F.vectors
             energies[1:m] = F.values
             perm = sortperm(energies[1:m])
             energies[1:m] = energies[perm[1:m]]
-            L[1:m, 1:m] = L[1:m, perm[1:m]]
+            Ks.L[1:m, 1:m] = Ks.L[1:m, perm[1:m]]
     
             e = energies[1]
             error = abs((ene-e)/e)
@@ -214,14 +211,14 @@ function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vec
 
             j += 1 
             # one Lanczos vector is added to the basis 
-            p[:, m+1] -= a[m] .* p[:, m] .+ b[m]*p[:, m-1]
+            Ks.Q[:, m+1] -= Ks.α[m] .* Ks.Q[:, m] .+ Ks.β[m]*Ks.Q[:, m-1]
 
-            b[m+1] = normalize!(p, m+1)            
+            Ks.β[m+1] = normalize!(Ks.Q, m+1)            
             # explicit reorthogonalization of each newly generated state w.r.t. all 
             # other Lanczos vectors 
             for i = 1:m
-                Konst = dot(p[:, m+1], p[:, i]) 
-                p[:, m+1] = (p[:, m+1] .- Konst .* p[:, i]) ./ (1 - Konst * Konst)
+                Konst = dot(Ks.Q[:, m+1], Ks.Q[:, i]) 
+                Ks.Q[:, m+1] = (Ks.Q[:, m+1] .- Konst .* Ks.Q[:, i]) ./ (1 - Konst * Konst)
             end     
 
         end 
@@ -232,10 +229,10 @@ function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vec
     fill!(g_out, 0.0)
     for k = 1:n 
         for l = 1:j
-            g_out[k] = g_out[k] + L[l, 1] * p[k, l]
+            g_out[k] = g_out[k] + Ks.L[l, 1] * Ks.Q[k, l]
         end 
     end 
     normalize!(g_out)
-    return g_out
+    return Ks, g_out
 
 end

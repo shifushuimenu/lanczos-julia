@@ -14,7 +14,7 @@ include("Lanczos.jl")
     h = hinit(J, hx=0.1, hz=0.0)
     info = LanczosInfo(4, 20, false, 1.0)
     gamma = hoperation!(h, ones(2^N), ones(2^N))
-    g_out = lanczos_sparse(h, ones(2^N), gamma, info)
+    (Ks, g_out) = lanczos_sparse(h, ones(2^N), gamma, info)
     # measure ground state energy
     g2 = zeros(2^N)
     g2 = hoperation!(h, g_out, g2)
