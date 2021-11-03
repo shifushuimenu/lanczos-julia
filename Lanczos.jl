@@ -1,5 +1,5 @@
 # TODO: - extend to complex numbers 
-#       - 
+#       - struct for Krylov space 
 # Later: 
 #       - entanglement entropy
 
@@ -22,6 +22,27 @@ function SparseHamiltonian(iT::Type, fT::Type, N::Int)
     E = Vector{iT}(undef, n)  
     H = Vector{fT}(undef, num_matrix_el)
     SparseHamiltonian{iT, fT}(n, B, E, H)
+end 
+
+
+abstract type AbstractKrylovSubspace end 
+
+struct KrylovSubspace{rT, cT} <: AbstractKrylovSubspace 
+    m::Int 
+    Q::Array{cT, 2}
+    α::Vector{rT}
+    β::Vector{rT}
+    L::Array{rT, 2}
+    ψ0::Vector{cT}
+end 
+
+function KrylovSubspace(rT::Type, n::Int, m::Int, ψ0::AbstractVector) 
+    cT = rT  # IMPROVE: cT = complex(rT)
+    Q = Array{rT, 2}(undef, (n, m+1))
+    α = Vector{rT}(undef, m)
+    β = Vector{rT}(undef, m+1)
+    L = Array{rT, 2}(undef, (m, m))
+    KrylovSubspace{rT, cT}(m, Q, α, β, L, ψ0)
 end 
 
 
@@ -122,11 +143,10 @@ function lanczos_sparse(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vec
     p = Array{Float64, 2}(undef, (n, info.qmax+1))
     a = Vector{Float64}(undef, info.qmax)
     b = Vector{Float64}(undef, info.qmax+1)
-    energies = Vector{Float64}(undef, info.qmax)
-    fill!(a, 0.0); fill!(b, 0.0); fill!(energies, 0.0); fill!(p, 0.0)
     L = Array{Float64, 2}(undef, (info.qmax, info.qmax))
-    fill!(L, 0.0)
-    
+
+    energies = Vector{Float64}(undef, info.qmax)
+
     # generate the first two Lanczos states
     normalize!(v)
     p[:, 1] = v    
