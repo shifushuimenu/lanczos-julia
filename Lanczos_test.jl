@@ -37,7 +37,7 @@ end
     h = hinit(J, hx=0.1, hz=0.0)
     info = LanczosInfo(10, 200, false, 1.0)
     gamma = hoperation!(h, ones(2^N), ones(2^N))
-    @time g_out = lanczos_twopass(h, ones(2^N), gamma, info)  
+    @time (Ks, g_out) = lanczos_twopass(h, ones(2^N), gamma, info)  
 
     # measure ground state energy
     g2 = zeros(2^N)
@@ -48,6 +48,3 @@ end
     println("GS_energy=", GS_energy)
     @test isapprox(GS_energy, -1.0025016072757338, atol=1e-8 )
 end 
-
-
-

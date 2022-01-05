@@ -1,17 +1,3 @@
-# TODO: - extend to complex numbers 
-#       - struct for Krylov space 
-#       - two-pass Lanczos with only two and three Lanczos states (without re-orthogonalization)
-#       - Documentation
-#       - Measurements of diagonal and off-diagonal observables 
-# Later: 
-#       - time evolution 
-#       - calculate Floquet spectrum by time evolution 
-#       - finite temperature, response functions
-#       - arbitrary lattices 
-#       - Rydberg systems, i.e. Hilbert space sectors  
-#       - Kanamori Hamiltonian 
-#       - entanglement entropy for detecting phase boundaries 
-
 using LinearAlgebra
 
 "normalize a vector in place"
@@ -238,7 +224,7 @@ function lanczos_twopass(h::SparseHamiltonian{Int64, T}, v_init::Vector{T}, g_ou
     end 
     
     normalize!(g_out) # should be normalized already 
-    return g_out 
+    return Ks, g_out 
 
 end 
 
