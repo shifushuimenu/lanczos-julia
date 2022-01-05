@@ -229,7 +229,7 @@ function lanczos_twopass(h::SparseHamiltonian{Int64, T}, v_init::Vector{T}, g_ou
 end 
 
 
-""""return ground state vector and Krylov subspace object 
+"""return ground state vector and Krylov subspace object 
  - v: random input vector on which the Krylov space is built
  - g_out: allocated vector into which the normalized ground state is written"""
 function lanczos_reortho(h::SparseHamiltonian{Int64, T}, v::Vector{T}, g_out::Vector{T}, 
